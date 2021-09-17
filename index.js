@@ -1,13 +1,13 @@
-import fs from 'fs'
-import path from "path"
-import { fileURLToPath } from 'url';
+const fs = require('fs')
+const path = require('path')
 
-import fetch from 'node-fetch'
-import readline from 'readline-sync'
-import {Command} from 'commander/esm.mjs';
+const { get } = require('lodash')
+const axios = require('axios')
+const readline = require('readline-sync')
+const {Command} = require('commander')
 
-import secrets from './secrets.js'
-import config from './config.js'
+const secrets = require('./secrets.js')
+const config = require('./config.js')
 
 const setupCLI = () => {
     const program = new Command()
@@ -22,11 +22,9 @@ const setupCLI = () => {
     return program.opts();
 }
 
-let retries = 0
 const options = setupCLI()
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
+let curr_retries = 0
 const run = async () => {
     try {
         if (config)
@@ -61,7 +59,7 @@ const run = async () => {
             console.info('Temperature set to', options.temperature, 'and mode', options.mode || stats.mode)
         }
     } catch (e) {
-        if (e.error && e.error.message.includes('Request had invalid authentication credentials') && retries++ < config.max_retries) {
+        if (e.message.includes('Request had invalid authentication credentials') && curr_retries++ < config.max_retries) {
             await refreshToken()
             return await run()
         }
@@ -104,44 +102,46 @@ const setup = async () => {
 }
 
 const request = (url, options = {}) => {
+    options.url = url
     options.headers = {
         Authorization: `Bearer ${secrets.access_token}`,
         "Content-Type": "application/json"
     }
 
-    return fetch(url, options).then(async response => {
-        if (!response.ok) {
-            throw await response.json()
+    return axios(options).catch(error => {
+        if (error.response) {
+            if (get(error, 'response.data.error')) throw get(error, 'response.data.error')
+            throw error.response
         }
-        return response.json()
-    })
+        throw error
+    }).then(response => response.data)
 }
 
-const saveSecrets = () => fs.writeFileSync(path.join(__dirname, 'secrets.js'), `export default ${JSON.stringify(secrets, null, 2)}`)
+const saveSecrets = () => fs.writeFileSync(path.join(__dirname, 'secrets.js'), `module.exports = ${JSON.stringify(secrets, null, 2)}`)
 
 const refreshToken = async () => {
-    console.debug('refreshing token')
+    console.debug('Refreshing token...\n')
     const response = await request(`https://www.googleapis.com/oauth2/v4/token?client_id=${secrets.client_id}&client_secret=${secrets.client_secret}&refresh_token=${secrets.refresh_token}&grant_type=refresh_token`, {
-        method: "POST"
+        method: "post"
     })
     secrets.access_token = response.access_token
     saveSecrets()
 }
 
 const setMode = mode => request(`https://smartdevicemanagement.googleapis.com/v1/enterprises/${secrets.project_id}/devices/${secrets.device_id}:executeCommand`, {
-    body: JSON.stringify({
+    data: JSON.stringify({
         "command": "sdm.devices.commands.ThermostatMode.SetMode",
         "params": {mode}
     }),
-    method: "POST"
+    method: "post"
 })
 
 const setTemp = (mode, temp) => request(`https://smartdevicemanagement.googleapis.com/v1/enterprises/${secrets.project_id}/devices/${secrets.device_id}:executeCommand`, {
-    body: JSON.stringify({
+    data: JSON.stringify({
         "command": `sdm.devices.commands.ThermostatTemperatureSetpoint.Set${mode[0].toUpperCase() + mode.substring(1).toLowerCase()}`,
         "params": {[mode.toLowerCase() + 'Celsius']: fToC(temp)}
     }),
-    method: "POST"
+    method: "post"
 })
 
 const getStructures = () => request(`https://smartdevicemanagement.googleapis.com/v1/enterprises/${secrets.project_id}/structures`)

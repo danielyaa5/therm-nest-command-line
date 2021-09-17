@@ -1,18 +1,25 @@
 {
-  "name": "therm-nest-cli",
-  "version": "0.1.0",
+  "name": "therm-nest-command-line",
+  "version": "0.0.3",
   "description": "",
   "main": "index.js",
   "scripts": {},
-  "type": "module",
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "axios": "0.21.4",
     "commander": "8.2.0",
-    "node-fetch": "3.0.0",
+    "lodash": "4.17.21",
     "readline-sync": "1.4.10"
   },
   "bin": {
-    "therm": "index.js"
+    "therm": "./bin/index.js"
+  },
+  "keywords": [
+    "nest", "api", "cli", "google", "devices", "thermostat", "smart home", "command line", "terminal"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/danielyaa5/therm-nest-command-line"
   }
 }
